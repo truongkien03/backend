@@ -4,13 +4,23 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\FirebaseStorageService;
 use App\Utils\TwilioClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ProfileController extends Controller
 {
+    protected $firebaseStorage;
+    
+    public function __construct(FirebaseStorageService $firebaseStorage)
+    {
+        $this->firebaseStorage = $firebaseStorage;
+    }
+
     /**
      * @OA\Get(
      *      path="/profile",
@@ -50,7 +60,6 @@ class ProfileController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'name' => 'nullable|max:255',
-            'phone_number' => 'nullable|max:255',
             'address' => 'required',
             'address.lat' => 'required|numeric',
             'address.lon' => 'required|numeric',
@@ -68,10 +77,6 @@ class ProfileController extends Controller
 
         if (isset($request['name'])) {
             $data['name'] = $request['name'];
-        }
-
-        if (isset($request['phone_number'])) {
-            $data['phone_number'] = $request['phone_number'];
         }
 
         if (isset($request['address'])) {
@@ -222,8 +227,9 @@ class ProfileController extends Controller
     public function changeAvatar(Request $request)
     {
         try {
+            // Validate that we received an image file
             $validator = Validator::make($request->all(), [
-                'avatar' => 'required|url|max:2048',
+                'avatar' => 'required|image|max:2048', // Max 2MB
             ]);
 
             if ($validator->fails()) {
@@ -233,12 +239,35 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            auth()->user()->update([
-                'avatar' => $request['avatar']
+            // Get authenticated user
+            $user = auth()->user();
+            
+            // Delete old avatar if it exists
+            if ($user->avatar) {
+                $oldPath = str_replace('/storage/', '', parse_url($user->avatar, PHP_URL_PATH));
+                if ($oldPath && Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+
+            // Upload new avatar
+            $file = $request->file('avatar');
+            $extension = $file->getClientOriginalExtension();
+            $filename = 'avatars/' . Str::uuid() . '.' . $extension;
+            
+            // Store the file
+            $file->storeAs('public', $filename);
+            
+            // Generate the URL for the avatar
+            $avatarUrl = url('storage/' . $filename);
+            
+            // Update user with new avatar URL
+            $user->update([
+                'avatar' => $avatarUrl
             ]);
 
             return response()->json([
-                'avatar' => $request['avatar']
+                'avatar' => $avatarUrl
             ]);
         } catch (\Exception $e) {
             return response()->json([
@@ -246,7 +275,7 @@ class ProfileController extends Controller
                 'message' => [
                     $e->getMessage()
                 ]
-            ]);
+            ], 500);
         }
     }
 
@@ -255,5 +284,65 @@ class ProfileController extends Controller
         return response()->json([
             'data' => $request->user()->notifications()->latest()->paginate()
         ]);
+    }
+
+    /**
+     * @OA\Post(
+     *      path="/set-password",
+     *      operationId="setInitialPassword",
+     *      tags={"Profile"},
+     *      summary="Đặt mật khẩu lần đầu cho người dùng",
+     *      description="API này dùng để đặt mật khẩu cho người dùng mới đăng ký bằng OTP",
+     *      @OA\Response(response=204,description="successful operation"),
+     *      @OA\Response(response=422, description="Bad request"),
+     *      @OA\Response(response=500, description="Server error"),
+     *      security={
+     *          {"bearerAuth": {}}
+     *      }
+     *     )
+     */
+    public function setInitialPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'password' => 'bail|required|string|min:6|confirmed',
+            ], [
+                'required' => config('errors.code.validation')['required'],
+                'string' => config('errors.code.validation')['string'],
+                'min' => config('errors.code.validation')['min'],
+                'confirmed' => config('errors.code.validation')['confirmed'],
+            ]);
+
+            if ($validator->fails()) {
+                return response([
+                    'error' => true,
+                    'errorCode' => $validator->messages()
+                ], 422);
+            }
+
+            $user = auth()->user();
+            
+            // Kiểm tra nếu người dùng đã có mật khẩu
+            if ($user->password) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'User already has a password. Use change password API instead.'
+                ], 422);
+            }
+
+            $user->update([
+                'password' => bcrypt($request['password'])
+            ]);
+
+            return response([], 204);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => true,
+                'message' => [
+                    $e->getMessage()
+                ],
+                'errorCode' => 500
+            ], 500);
+        }
     }
 }

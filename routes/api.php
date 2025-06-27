@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\LoginWithOtpController;
 use App\Http\Controllers\Api\Auth\ProfileController;
 use App\Http\Controllers\Api\Auth\RegisterController;
+use App\Http\Controllers\Api\Auth\LoginWithPasswordController;
 use App\Http\Controllers\Api\CurrentLocationController;
 use App\Http\Controllers\Api\Driver\Auth\LoginController;
 use App\Http\Controllers\Api\Driver\Auth\RegisterController as DriverRegisterController;
@@ -11,7 +13,6 @@ use App\Http\Controllers\Api\Driver\OrderController as AppOrderController;
 use App\Http\Controllers\Api\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Api\Driver\SharingController;
 use App\Http\Controllers\Api\OrderController;
-use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,10 +27,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('register', [RegisterController::class, 'register']);
 Route::post('register/otp', [RegisterController::class, 'sendOtpForRegister']);
-Route::post('/login', [LoginWithOtpController::class, 'login']);
-Route::post('/login/otp', [LoginWithOtpController::class, 'sendOtp']);
-Route::post('/password/reset', [ProfileController::class, 'resetPassword']);
-Route::post('/password/forgot', [ProfileController::class, 'forgotPassword']);
+Route::post('login', [LoginWithOtpController::class, 'login']);
+Route::post('login/otp', [LoginWithOtpController::class, 'sendOtp']);
+Route::post('login/password', LoginWithPasswordController::class);
+Route::post('password/reset', [ProfileController::class, 'resetPassword']);
+Route::post('password/forgot', [ProfileController::class, 'forgotPassword']);
 
 Route::middleware(['auth:api'])->group(function () {
     Route::post('/fcm/token', [DriverProfileController::class, 'addFcmToken']);
@@ -37,6 +39,7 @@ Route::middleware(['auth:api'])->group(function () {
     Route::get('/notifications', [ProfileController::class, 'notifications']);
     Route::get('/profile', [ProfileController::class, 'getProfile']);
     Route::post('/password', [ProfileController::class, 'changePassword']);
+    Route::post('/set-password', [ProfileController::class, 'setInitialPassword']);
     Route::post('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/avatar', [ProfileController::class, 'changeAvatar']);
     Route::get('/orders/inproccess', [OrderController::class, 'getInProcessList']);
@@ -83,4 +86,8 @@ Route::prefix('driver')->group(function () {
             Route::post('/orders/{order}/drivers/sharing/decline', [AppOrderController::class, 'declineOrderSharing']);
         });
     });
+});
+
+Route::middleware('auth:api')->group(function () {
+    Route::post('/set-password', \App\Http\Controllers\Api\Auth\SetPasswordController::class);
 });

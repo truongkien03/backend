@@ -10,7 +10,7 @@
         "fideloper/proxy": "^4.4",
         "fruitcake/laravel-cors": "^3.0",
         "guzzlehttp/guzzle": "^7.0.1",
-        "kreait/laravel-firebase": "^3.1",
+        "kreait/laravel-firebase": "^3.4",
         "laravel-notification-channels/fcm": "~2.0",
         "laravel-notification-channels/twilio": "^3.1",
         "laravel/framework": "^8.12",
