@@ -74,4 +74,22 @@ class Driver extends Authenticatable
 
         return true;
     }
+
+    /**
+     * Check if driver has password set
+     */
+    public function getHasPasswordAttribute()
+    {
+        return !is_null($this->password);
+    }
+
+    /**
+     * Override toArray to include hasPassword attribute
+     */
+    public function toArray()
+    {
+        $array = parent::toArray();
+        $array['hasPassword'] = $this->has_password;
+        return $array;
+    }
 }

@@ -18,7 +18,7 @@ class CreateDriversTable extends Migration
             $table->string('name')->nullable();
             $table->string('avatar', 512)->default('storage/driver/avatar.png');
             $table->string('phone_number')->unique();
-            $table->timestamp('email_verified_at')->nullable();
+            $table->string('email')->nullable();
             $table->string('password')->nullable();
             $table->float('review_rate', 3, 2)->nullable();
             $table->json('current_location')->nullable();

@@ -58,6 +58,7 @@ Route::prefix('driver')->group(function () {
     Route::post('/register', [DriverRegisterController::class, 'register']);
     Route::post('/login', [LoginController::class, 'loginWithOtp']);
     Route::post('/login/otp', [LoginController::class, 'sendOtp']);
+    Route::post('/login/password', [LoginController::class, 'loginWithPassword']);
     Route::post('/fcm/token', [DriverProfileController::class, 'addFcmToken']);
     Route::delete('/fcm/token', [DriverProfileController::class, 'removeFcmToken']);
     Route::post('/finding', [SharingController::class, 'find']);
@@ -73,6 +74,8 @@ Route::prefix('driver')->group(function () {
         Route::post('/fcm/token', [DriverProfileController::class, 'addFcmToken']);
         Route::delete('/fcm/token', [DriverProfileController::class, 'removeFcmToken']);
         Route::get('/notifications', [DriverProfileController::class, 'notifications']);
+        Route::post('/set-password', \App\Http\Controllers\Api\Driver\Auth\SetPasswordController::class);
+        Route::post('/change-password', \App\Http\Controllers\Api\Driver\Auth\ChangePasswordController::class);
 
         Route::middleware(['profileVerified'])->group(function () {
             Route::post('current-location', [CurrentLocationController::class, 'updateLocation']);

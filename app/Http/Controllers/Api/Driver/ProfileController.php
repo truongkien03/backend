@@ -79,7 +79,8 @@ class ProfileController extends Controller
             'cmnd_front_url' => 'bail|required|url',
             'cmnd_back_url' => 'bail|required|url',
             'reference_code' => 'bail|nullable|string|max:255',
-            'name' => 'bail|required|string|max:50'
+            'name' => 'bail|required|string|max:50',
+            'email' => 'bail|nullable|email|max:255|unique:drivers,email,' . auth('driver')->id(), // ✅ THÊM EMAIL VALIDATION
         ]);
 
         if ($validator->fails()) {
@@ -89,9 +90,16 @@ class ProfileController extends Controller
             ], 422);
         }
 
-        auth()->user()->update([
-            'name' => $request['name']
-        ]);
+        // ✅ CẬP NHẬT DRIVER INFO VỚI EMAIL
+        $driver = auth('driver')->user();
+        $updateData = ['name' => $request['name']];
+        
+        // Chỉ cập nhật email nếu có trong request
+        if ($request->has('email') && $request->email !== null) {
+            $updateData['email'] = $request->email;
+        }
+        
+        $driver->update($updateData);
 
         $profile = DriverProfile::updateOrCreate([
             'driver_id' => auth('driver')->id()
@@ -105,8 +113,14 @@ class ProfileController extends Controller
             'reference_code',
         ]));
 
+        // ✅ TRẢ VỀ ĐẦY ĐỦ THÔNG TIN DRIVER + PROFILE
         return response()->json([
-            'data' => $profile
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'data' => [
+                'driver' => $driver->fresh()->load('profile'),
+                'profile' => $profile
+            ]
         ]);
     }
 

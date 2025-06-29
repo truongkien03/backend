@@ -7,6 +7,7 @@ use App\Models\Driver;
 use App\Utils\TwilioClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
 class LoginController extends Controller
@@ -128,6 +129,97 @@ class LoginController extends Controller
                 'error' => true,
                 'message' => [$e->getMessage()],
                 'errorCode' => 500
+            ], 500);
+        }
+    }
+
+    /**
+     * @OA\Post(
+     *      path="/driver/login/password",
+     *      operationId="loginWithPassword",
+     *      tags={"driver"},
+     *      summary="Login driver with phone number and password",
+     *      description="Alternative login method using password instead of OTP",
+     *      @OA\Parameter(
+     *          name="phone_number",
+     *          required=true,
+     *          in="query",
+     *          @OA\Schema(
+     *              type="string"
+     *          )
+     *      ),
+     *      @OA\Parameter(
+     *          name="password",
+     *          required=true,
+     *          in="query",
+     *          @OA\Schema(
+     *              type="string"
+     *          )
+     *      ),
+     *      @OA\Response(response=200,description="Login successful", @OA\JsonContent()),
+     *      @OA\Response(response=422, description="Validation failed"),
+     *      @OA\Response(response=401, description="Invalid credentials"),
+     *      @OA\Response(response=500, description="Server error"),
+     *     )
+     */
+    public function loginWithPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'phone_number' => 'bail|required|regex:/^\+?[1-9]\d{1,14}$/|exists:drivers,phone_number',
+                'password' => 'bail|required|string'
+            ], [
+                'phone_number.required' => 'Số điện thoại là bắt buộc',
+                'phone_number.exists' => 'Số điện thoại không tồn tại',
+                'phone_number.regex' => 'Định dạng số điện thoại không hợp lệ',
+                'password.required' => 'Mật khẩu là bắt buộc',
+                'password.string' => 'Mật khẩu phải là chuỗi ký tự',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $driver = Driver::where('phone_number', $request->phone_number)->first();
+
+            // Kiểm tra tài xế có mật khẩu không
+            if (!$driver->password) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Driver does not have a password. Please use OTP login or set a password first.'
+                ], 401);
+            }
+
+            // Kiểm tra mật khẩu
+            if (!Hash::check($request->password, $driver->password)) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'Invalid phone number or password'
+                ], 401);
+            }
+
+            // Revoke old tokens (single session)
+            foreach($driver->tokens as $token) {
+                $token->revoke();
+            }
+
+            // Generate new token
+            $tokenData = $driver->createToken('loginToken');
+
+            return response()->json([
+                'message' => 'Login successful',
+                'data' => $tokenData
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Server error occurred',
+                'details' => $e->getMessage()
             ], 500);
         }
     }
