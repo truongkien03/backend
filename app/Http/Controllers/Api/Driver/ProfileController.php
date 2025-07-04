@@ -72,15 +72,15 @@ class ProfileController extends Controller
     public function updateProfile(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'gplx_front_url' => 'bail|required|url',
-            'gplx_back_url' => 'bail|required|url',
-            'baohiem_url' => 'bail|required|url',
-            'dangky_xe_url' => 'bail|required|url',
-            'cmnd_front_url' => 'bail|required|url',
-            'cmnd_back_url' => 'bail|required|url',
+            'gplx_front' => 'bail|required|image|mimes:jpeg,png,jpg|max:2048',
+            'gplx_back' => 'bail|required|image|mimes:jpeg,png,jpg|max:2048',
+            'baohiem' => 'bail|required|image|mimes:jpeg,png,jpg|max:2048',
+            'dangky_xe' => 'bail|required|image|mimes:jpeg,png,jpg|max:2048',
+            'cmnd_front' => 'bail|required|image|mimes:jpeg,png,jpg|max:2048',
+            'cmnd_back' => 'bail|required|image|mimes:jpeg,png,jpg|max:2048',
             'reference_code' => 'bail|nullable|string|max:255',
             'name' => 'bail|required|string|max:50',
-            'email' => 'bail|nullable|email|max:255|unique:drivers,email,' . auth('driver')->id(), // ✅ THÊM EMAIL VALIDATION
+            'email' => 'bail|nullable|email|max:255|unique:drivers,email,' . auth('driver')->id(),
         ]);
 
         if ($validator->fails()) {
@@ -90,30 +90,70 @@ class ProfileController extends Controller
             ], 422);
         }
 
-        // ✅ CẬP NHẬT DRIVER INFO VỚI EMAIL
         $driver = auth('driver')->user();
-        $updateData = ['name' => $request['name']];
+        $driverId = $driver->id;
         
-        // Chỉ cập nhật email nếu có trong request
+        // Upload và lưu các ảnh vào local storage
+        $imageFields = [
+            'gplx_front' => 'gplx_front_url',
+            'gplx_back' => 'gplx_back_url', 
+            'baohiem' => 'baohiem_url',
+            'dangky_xe' => 'dangky_xe_url',
+            'cmnd_front' => 'cmnd_front_url',
+            'cmnd_back' => 'cmnd_back_url'
+        ];
+
+        $uploadedUrls = [];
+
+        foreach ($imageFields as $inputName => $dbField) {
+            if ($request->hasFile($inputName)) {
+                // Tạo tên file unique
+                $file = $request->file($inputName);
+                $filename = $driverId . '_' . $inputName . '_' . time() . '.' . $file->getClientOriginalExtension();
+                
+                // Lưu vào thư mục public/storage/driver_documents
+                $path = $file->storeAs('driver_documents', $filename, 'public');
+                
+                // Tạo URL public để access
+                $uploadedUrls[$dbField] = asset('storage/' . $path);
+            }
+        }
+
+        // Cập nhật thông tin driver
+        $updateData = ['name' => $request->name];
+        
         if ($request->has('email') && $request->email !== null) {
             $updateData['email'] = $request->email;
         }
         
         $driver->update($updateData);
 
-        $profile = DriverProfile::updateOrCreate([
-            'driver_id' => auth('driver')->id()
-        ], $request->only([
-            'gplx_front_url',
-            'gplx_back_url',
-            'baohiem_url',
-            'dangky_xe_url',
-            'cmnd_front_url',
-            'cmnd_back_url',
-            'reference_code',
-        ]));
+        // Lấy profile hiện tại để giữ lại ảnh cũ nếu không upload ảnh mới
+        $existingProfile = DriverProfile::where('driver_id', $driverId)->first();
+        
+        $profileData = [
+            'reference_code' => $request->reference_code,
+        ];
+        
+        // Merge uploaded URLs với dữ liệu hiện có
+        foreach ($imageFields as $inputName => $dbField) {
+            if (isset($uploadedUrls[$dbField])) {
+                // Xóa ảnh cũ nếu có
+                if ($existingProfile && $existingProfile->{$dbField}) {
+                    $oldPath = str_replace(asset('storage/'), '', $existingProfile->{$dbField});
+                    Storage::disk('public')->delete($oldPath);
+                }
+                $profileData[$dbField] = $uploadedUrls[$dbField];
+            } elseif ($existingProfile) {
+                // Giữ lại ảnh cũ nếu không upload ảnh mới
+                $profileData[$dbField] = $existingProfile->{$dbField};
+            }
+        }
 
-        // ✅ TRẢ VỀ ĐẦY ĐỦ THÔNG TIN DRIVER + PROFILE
+        $profile = DriverProfile::updateOrCreate([
+            'driver_id' => $driverId
+        ], $profileData);
+
         return response()->json([
             'success' => true,
             'message' => 'Profile updated successfully',

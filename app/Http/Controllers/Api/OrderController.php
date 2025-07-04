@@ -78,7 +78,7 @@ class OrderController extends Controller
         }
 
         $request['distance'] = $distanceInKilometer;
-        $request['shipping_cost'] = $this->calculateShippingFee($distanceInKilometer);
+        $request['shipping_cost'] = $this->calculateShippingFeeAmount($distanceInKilometer);
 
         $order = Order::create($request->only([
             'user_id',
@@ -90,6 +90,9 @@ class OrderController extends Controller
             'user_note',
             'receiver'
         ]));
+
+        // Tự động tìm và gửi thông báo cho tài xế ngẫu nhiên
+        dispatch(new FindRandomDriverForOrder($order));
 
         return response()->json([
             'data' => $order
@@ -165,12 +168,12 @@ class OrderController extends Controller
     }
 
     /**
-     * @OA\Get(
+     * @OA\Post(
      *      path="/shipping-fee",
-     *      operationId="getShippingFee",
+     *      operationId="calculateShippingFee",
      *      tags={"Order"},
-     *      summary="",
-     *      description="",
+     *      summary="Calculate shipping fee based on pickup and delivery locations",
+     *      description="Calculate shipping fee including distance calculation and peak hour surcharge",
      *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
      *      @OA\Response(response=422, description="Bad request"),
      *      @OA\Response(response=500, description="Server error"),
@@ -179,11 +182,17 @@ class OrderController extends Controller
      *      }
      *     )
      */
-    public function getShippingFee(Request $request)
+    public function calculateShippingFee(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'from_address' => 'required',
-            'to_address' => 'required',
+            'from_address' => 'required|json',
+            'from_address.lat' => 'required|numeric|between:-90,90',
+            'from_address.lon' => 'required|numeric|between:-180,180', 
+            'from_address.desc' => 'required|string|max:255',
+            'to_address' => 'required|json',
+            'to_address.lat' => 'required|numeric|between:-90,90',
+            'to_address.lon' => 'required|numeric|between:-180,180',
+            'to_address.desc' => 'required|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -193,9 +202,46 @@ class OrderController extends Controller
             ], 422);
         }
 
-        $distanceInKilometer = $this->getDistanceInKilometer($request['to_address'], $request['to_address']);
+        // Parse JSON addresses
+        $fromAddress = is_string($request['from_address']) 
+            ? json_decode($request['from_address'], true) 
+            : $request['from_address'];
+            
+        $toAddress = is_string($request['to_address']) 
+            ? json_decode($request['to_address'], true) 
+            : $request['to_address'];
 
-        return $this->calculateShippingFee($distanceInKilometer);
+        // Calculate distance using coordinates
+        $distanceInKilometer = $this->getDistanceInKilometer(
+            $fromAddress['lat'] . ',' . $fromAddress['lon'],
+            $toAddress['lat'] . ',' . $toAddress['lon']
+        );
+
+        // Check distance limit
+        if ($distanceInKilometer > 100) {
+            return response()->json([
+                'error' => true,
+                'message' => [
+                    'distance' => [
+                        'Hệ thống tạm thời không hỗ trợ đơn hàng xa hơn 100km'
+                    ]
+                ]
+            ], 422);
+        }
+
+        $shippingFee = $this->calculateShippingFeeAmount($distanceInKilometer);
+        $estimatedTime = $this->calculateEstimatedTime($distanceInKilometer);
+
+        return response()->json([
+            'data' => [
+                'distance' => round($distanceInKilometer, 2),
+                'shipping_fee' => $shippingFee,
+                'estimated_time' => $estimatedTime,
+                'from_address' => $fromAddress,
+                'to_address' => $toAddress,
+                'calculated_at' => now()->toISOString(),
+            ]
+        ]);
     }
 
     /**
@@ -261,20 +307,44 @@ class OrderController extends Controller
 
     private function getDistanceInKilometer($fromAddress, $toAddress)
     {
-        $response = json_decode(Http::get('https://maps.googleapis.com/maps/api/distancematrix/json', [
-            'units' => 'metric',
-            'key' => config('google.maps.api_key'),
-            'origins' => $fromAddress,
-            'destinations' => $toAddress
-        ]), true);
+        // OSRM API sử dụng format: longitude,latitude
+        // $fromAddress và $toAddress format: "lat,lon"
+        $fromCoords = explode(',', $fromAddress);
+        $toCoords = explode(',', $toAddress);
+        
+        // Convert to OSRM format: lon,lat
+        $fromOSRM = $fromCoords[1] . ',' . $fromCoords[0]; // lon,lat
+        $toOSRM = $toCoords[1] . ',' . $toCoords[0];       // lon,lat
+        
+        try {
+            // Sử dụng config OSM thay vì hardcode URL
+            $baseUrl = config('osm.osrm.base_url', 'http://router.project-osrm.org');
+            $timeout = config('osm.osrm.timeout', 10);
+            
+            $osrmUrl = "{$baseUrl}/route/v1/driving/{$fromOSRM};{$toOSRM}";
+            
+            $response = json_decode(Http::timeout($timeout)->get($osrmUrl, [
+                'overview' => 'false',
+                'steps' => 'false'
+            ]), true);
 
-        $directions = $response['rows'][0];
-
-        $distanceInMeter = $directions['elements']['0']['distance']['value'];
-
-        $distanceInKilometer = $distanceInMeter / 1000;
-
-        return $distanceInKilometer;
+            if (isset($response['code']) && $response['code'] === 'Ok' && !empty($response['routes'])) {
+                $distanceInMeters = $response['routes'][0]['distance'];
+                $distanceInKilometers = $distanceInMeters / 1000;
+                
+                return $distanceInKilometers;
+            }
+            
+            // Fallback: Nếu OSRM không hoạt động, dùng khoảng cách đường chim bay
+            return $this->getDistanceInKilometerAsCrowFly($fromAddress, $toAddress);
+            
+        } catch (\Exception $e) {
+            // Log lỗi để debug
+            \Log::warning('OSRM API failed: ' . $e->getMessage());
+            
+            // Fallback: Tính khoảng cách đường chim bay
+            return $this->getDistanceInKilometerAsCrowFly($fromAddress, $toAddress);
+        }
     }
 
     /**
@@ -405,7 +475,7 @@ class OrderController extends Controller
         ]);
     }
 
-    private function calculateShippingFee($distanceInKilometer)
+    private function calculateShippingFeeAmount($distanceInKilometer)
     {
         $shippingFee = config('const.cost.first_km');
         if (($distanceInKilometer - 1) > 0) {
@@ -417,5 +487,105 @@ class OrderController extends Controller
         }
 
         return $shippingFee;
+    }
+
+    private function calculateEstimatedTime($distanceInKilometer)
+    {
+        // Tốc độ trung bình 30km/h trong thành phố
+        $averageSpeedKmh = 30;
+        $timeInHours = $distanceInKilometer / $averageSpeedKmh;
+        $timeInMinutes = round($timeInHours * 60);
+        
+        // Thêm buffer time cho việc lấy hàng và giao hàng
+        $bufferMinutes = 10;
+        $totalMinutes = $timeInMinutes + $bufferMinutes;
+        
+        if ($totalMinutes <= 15) {
+            return "10-15 phút";
+        } elseif ($totalMinutes <= 30) {
+            return "15-30 phút";
+        } elseif ($totalMinutes <= 45) {
+            return "30-45 phút";
+        } elseif ($totalMinutes <= 60) {
+            return "45-60 phút";
+        } else {
+            $hours = ceil($totalMinutes / 60);
+            return $hours . " giờ";
+        }
+    }
+
+    /**
+     * Helper method để lấy route từ OSRM cho Flutter app
+     * Trả về cả khoảng cách và geometry để vẽ route trên map
+     */
+    private function getOSRMRoute($fromLat, $fromLon, $toLat, $toLon)
+    {
+        try {
+            $baseUrl = config('osm.osrm.base_url', 'http://router.project-osrm.org');
+            $timeout = config('osm.osrm.timeout', 10);
+            
+            $osrmUrl = "{$baseUrl}/route/v1/driving/{$fromLon},{$fromLat};{$toLon},{$toLat}";
+            
+            $response = json_decode(Http::timeout($timeout)->get($osrmUrl, [
+                'overview' => 'full',
+                'geometries' => 'geojson'
+            ]), true);
+
+            if (isset($response['code']) && $response['code'] === 'Ok' && !empty($response['routes'])) {
+                $route = $response['routes'][0];
+                
+                return [
+                    'distance' => $route['distance'] / 1000, // km
+                    'duration' => $route['duration'] / 60,   // minutes
+                    'geometry' => $route['geometry']['coordinates'] ?? null
+                ];
+            }
+            
+            return null;
+            
+        } catch (\Exception $e) {
+            \Log::warning('OSRM Route API failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * API endpoint để Flutter app lấy route với geometry
+     * GET /api/route?from_lat=10.762622&from_lon=106.660172&to_lat=10.772622&to_lon=106.670172
+     */
+    public function getRoute(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'from_lat' => 'required|numeric',
+            'from_lon' => 'required|numeric',
+            'to_lat' => 'required|numeric',
+            'to_lon' => 'required|numeric',
+        ]);
+
+        if ($validator->fails()) {
+            return response([
+                'error' => true,
+                'message' => $validator->messages()
+            ], 422);
+        }
+
+        $route = $this->getOSRMRoute(
+            $request['from_lat'],
+            $request['from_lon'],
+            $request['to_lat'], 
+            $request['to_lon']
+        );
+
+        if ($route) {
+            return response()->json([
+                'success' => true,
+                'data' => $route
+            ]);
+        }
+
+        return response()->json([
+            'error' => true,
+            'message' => 'Cannot calculate route'
+        ], 500);
     }
 }

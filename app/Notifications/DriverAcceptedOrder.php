@@ -2,7 +2,7 @@
 
 namespace App\Notifications;
 
-use App\Fcm\FcmTopic;
+use App\Fcm\FcmDirect;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -34,7 +34,7 @@ class DriverAcceptedOrder extends Notification
      */
     public function via($notifiable)
     {
-        return ['database', FcmTopic::class];
+        return ['database', FcmDirect::class];
     }
 
     public function toFcm($notifiable)

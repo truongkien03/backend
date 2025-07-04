@@ -3,6 +3,7 @@
 namespace App\Traits;
 
 use App\Models\Driver;
+use App\Models\User;
 
 trait FcmNotifiable
 {
@@ -14,8 +15,22 @@ trait FcmNotifiable
     public function routeNotificationForFcm()
     {
         if (get_class($this) == Driver::class) {
+            // Driver sử dụng topic-based notification
             return 'driver-' . $this->id;
         }
-        return 'user' . $this->id;
+        
+        if (get_class($this) == User::class) {
+            // User sử dụng direct token notification
+            $tokens = $this->fcm_token ?? [];
+            
+            // Đảm bảo trả về array
+            if (!is_array($tokens)) {
+                return $tokens ? [$tokens] : [];
+            }
+            
+            return $tokens;
+        }
+        
+        return [];
     }
 }

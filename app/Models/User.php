@@ -46,7 +46,8 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
-        'address' => 'json'
+        'address' => 'json',
+        'fcm_token' => 'json'
     ];
 
     public function getHasCredentialAttribute()

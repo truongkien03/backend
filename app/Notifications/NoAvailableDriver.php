@@ -3,7 +3,7 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use App\Fcm\FcmTopic;
+use App\Fcm\FcmDirect;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -32,7 +32,7 @@ class NoAvailableDriver extends Notification
      */
     public function via($notifiable)
     {
-        return ['database', FcmTopic::class];
+        return ['database', FcmDirect::class];
     }
 
     public function toFcm($notifiable)

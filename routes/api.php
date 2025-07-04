@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\Driver\OrderController as AppOrderController;
 use App\Http\Controllers\Api\Driver\ProfileController as DriverProfileController;
 use App\Http\Controllers\Api\Driver\SharingController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\FcmController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,8 +35,8 @@ Route::post('password/reset', [ProfileController::class, 'resetPassword']);
 Route::post('password/forgot', [ProfileController::class, 'forgotPassword']);
 
 Route::middleware(['auth:api'])->group(function () {
-    Route::post('/fcm/token', [DriverProfileController::class, 'addFcmToken']);
-    Route::delete('/fcm/token', [DriverProfileController::class, 'removeFcmToken']);
+    Route::post('/fcm/token', [FcmController::class, 'addFcmToken']);
+    Route::delete('/fcm/token', [FcmController::class, 'removeFcmToken']);
     Route::get('/notifications', [ProfileController::class, 'notifications']);
     Route::get('/profile', [ProfileController::class, 'getProfile']);
     Route::post('/password', [ProfileController::class, 'changePassword']);
@@ -44,7 +45,8 @@ Route::middleware(['auth:api'])->group(function () {
     Route::post('/profile/avatar', [ProfileController::class, 'changeAvatar']);
     Route::get('/orders/inproccess', [OrderController::class, 'getInProcessList']);
     Route::get('/orders/completed', [OrderController::class, 'getCompleteList']);
-    Route::get('/shipping-fee', [OrderController::class, 'getShippingFee']);
+    Route::post('/shipping-fee', [OrderController::class, 'calculateShippingFee']);
+    Route::get('/route', [OrderController::class, 'getRoute']);
     Route::get('/orders/{order}', [OrderController::class, 'detail']);
     Route::get('/orders/{order}/drivers/recommended', [OrderController::class, 'getRecommendedDriver']);
     Route::post('/orders/{order}/drivers', [OrderController::class, 'updateDriver']);
@@ -59,8 +61,6 @@ Route::prefix('driver')->group(function () {
     Route::post('/login', [LoginController::class, 'loginWithOtp']);
     Route::post('/login/otp', [LoginController::class, 'sendOtp']);
     Route::post('/login/password', [LoginController::class, 'loginWithPassword']);
-    Route::post('/fcm/token', [DriverProfileController::class, 'addFcmToken']);
-    Route::delete('/fcm/token', [DriverProfileController::class, 'removeFcmToken']);
     Route::post('/finding', [SharingController::class, 'find']);
     Route::post('/sharing-group', [SharingController::class, 'addToSharingGroup']);
     Route::get('/sharing-group', [SharingController::class, 'sharingList']);
