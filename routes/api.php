@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Driver\ProfileController as DriverProfileController
 use App\Http\Controllers\Api\Driver\SharingController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\FcmController;
+use App\Http\Controllers\Api\FirebaseLocationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -93,4 +94,11 @@ Route::prefix('driver')->group(function () {
 
 Route::middleware('auth:api')->group(function () {
     Route::post('/set-password', \App\Http\Controllers\Api\Auth\SetPasswordController::class);
+});
+
+// Firebase Location APIs
+Route::prefix('firebase')->group(function () {
+    Route::get('/test-connection', [FirebaseLocationController::class, 'testConnection']);
+    Route::get('/online-drivers', [FirebaseLocationController::class, 'getOnlineDrivers']);
+    Route::get('/driver/{driverId}/location', [FirebaseLocationController::class, 'getDriverLocation']);
 });
