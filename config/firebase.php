@@ -32,7 +32,8 @@ return [
              * Project Configuration
              * ------------------------------------------------------------------------
              */
-            'project_id' => env('FIREBASE_PROJECT_ID', 'delivery-app-datn'),
+            'project_id' => env('FIREBASE_PROJECT_ID', '
+delivery-0805'),
 
             /*
              * ------------------------------------------------------------------------
