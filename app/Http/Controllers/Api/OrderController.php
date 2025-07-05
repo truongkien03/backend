@@ -39,12 +39,25 @@ class OrderController extends Controller
     public function createOrder(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'from_address' => 'required|json',
-            'to_address' => 'required|json',
-            'items' => 'required|json',
-            'discount' => 'nullable|numeric',
-            'user_note' => 'nullable|max:1000',
-            'receiver' => 'required|json',
+            'from_address' => 'required|array',
+            'from_address.lat' => 'required|numeric|between:-90,90',
+            'from_address.lon' => 'required|numeric|between:-180,180',
+            'from_address.desc' => 'required|string|max:255',
+            'to_address' => 'required|array',
+            'to_address.lat' => 'required|numeric|between:-90,90',
+            'to_address.lon' => 'required|numeric|between:-180,180',
+            'to_address.desc' => 'required|string|max:255',
+            'items' => 'required|array',
+            'items.*.name' => 'required|string|max:255',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.price' => 'required|numeric|min:0',
+            'items.*.note' => 'nullable|string|max:500',
+            'receiver' => 'required|array',
+            'receiver.name' => 'required|string|max:255',
+            'receiver.phone' => 'required|string|max:20',
+            'receiver.note' => 'nullable|string|max:500',
+            'discount' => 'nullable|numeric|min:0',
+            'user_note' => 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -56,14 +69,13 @@ class OrderController extends Controller
 
         $request['user_id'] = auth()->id();
 
-        $request['from_address'] = $origin = json_decode($request['from_address'], true);
-        $request['to_address'] = $destiny = json_decode($request['to_address'], true);
-        $request['items'] = json_decode($request['items'], true);
-        $request['receiver'] = json_decode($request['receiver'], true);
+        // Get addresses (already parsed as arrays by Laravel)
+        $origin = $request['from_address'];
+        $destiny = $request['to_address'];
 
         $distanceInKilometer = $this->getDistanceInKilometer(
-            implode(',', array_intersect_key($origin, ['lat' => 0, 'lon' => 0])),
-            implode(',', array_intersect_key($destiny, ['lat' => 0, 'lon' => 0]))
+            $origin['lat'] . ',' . $origin['lon'],
+            $destiny['lat'] . ',' . $destiny['lon']
         );
 
         if ($distanceInKilometer > 100) {
@@ -80,16 +92,17 @@ class OrderController extends Controller
         $request['distance'] = $distanceInKilometer;
         $request['shipping_cost'] = $this->calculateShippingFeeAmount($distanceInKilometer);
 
-        $order = Order::create($request->only([
-            'user_id',
-            'from_address',
-            'to_address',
-            'items',
-            'shipping_cost',
-            'distance',
-            'user_note',
-            'receiver'
-        ]));
+        $order = Order::create([
+            'user_id' => $request['user_id'],
+            'from_address' => $origin,
+            'to_address' => $destiny,
+            'items' => $request['items'],
+            'shipping_cost' => $request['shipping_cost'],
+            'distance' => $request['distance'],
+            'user_note' => $request['user_note'],
+            'receiver' => $request['receiver'],
+            'discount' => $request['discount'] ?? 0,
+        ]);
 
         // Tự động tìm và gửi thông báo cho tài xế ngẫu nhiên
         dispatch(new FindRandomDriverForOrder($order));
@@ -185,11 +198,11 @@ class OrderController extends Controller
     public function calculateShippingFee(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'from_address' => 'required|json',
+            'from_address' => 'required|array',
             'from_address.lat' => 'required|numeric|between:-90,90',
             'from_address.lon' => 'required|numeric|between:-180,180', 
             'from_address.desc' => 'required|string|max:255',
-            'to_address' => 'required|json',
+            'to_address' => 'required|array',
             'to_address.lat' => 'required|numeric|between:-90,90',
             'to_address.lon' => 'required|numeric|between:-180,180',
             'to_address.desc' => 'required|string|max:255',
@@ -202,14 +215,9 @@ class OrderController extends Controller
             ], 422);
         }
 
-        // Parse JSON addresses
-        $fromAddress = is_string($request['from_address']) 
-            ? json_decode($request['from_address'], true) 
-            : $request['from_address'];
-            
-        $toAddress = is_string($request['to_address']) 
-            ? json_decode($request['to_address'], true) 
-            : $request['to_address'];
+        // Get addresses (already parsed as arrays by Laravel)
+        $fromAddress = $request['from_address'];
+        $toAddress = $request['to_address'];
 
         // Calculate distance using coordinates
         $distanceInKilometer = $this->getDistanceInKilometer(
@@ -290,25 +298,26 @@ class OrderController extends Controller
         $fromAddress = explode(',', $fromAddress);
         $toAddress = explode(',', $toAddress);
 
-        $latitude1 = $fromAddress[0];
-        $longitude1 = $fromAddress[1];
-        $latitude2 = $toAddress[0];
-        $longitude2 = $toAddress[1];
+        $latFrom = deg2rad($fromAddress[0]);
+        $lonFrom = deg2rad($fromAddress[1]);
+        $latTo = deg2rad($toAddress[0]);
+        $lonTo = deg2rad($toAddress[1]);
 
-        $theta = $longitude1 - $longitude2;
-        $miles = (sin(deg2rad($latitude1)) * sin(deg2rad($latitude2))) + (cos(deg2rad($latitude1)) * cos(deg2rad($latitude2)) * cos(deg2rad($theta)));
-        $miles = acos($miles);
-        $miles = rad2deg($miles);
-        $miles = $miles * 60 * 1.1515;
-        $kilometers = $miles * 1.609344;
+        $lonDelta = $lonTo - $lonFrom;
+        $a = pow(cos($latTo) * sin($lonDelta), 2) +
+            pow(cos($latFrom) * sin($latTo) - sin($latFrom) * cos($latTo) * cos($lonDelta), 2);
+        $b = sin($latFrom) * sin($latTo) + cos($latFrom) * cos($latTo) * cos($lonDelta);
 
-        return $kilometers;
+        $angle = atan2(sqrt($a), $b);
+        return $angle * 6371;
     }
 
+    /**
+     * Tính khoảng cách sử dụng OSRM API với fallback về crow fly distance
+     */
     private function getDistanceInKilometer($fromAddress, $toAddress)
     {
-        // OSRM API sử dụng format: longitude,latitude
-        // $fromAddress và $toAddress format: "lat,lon"
+        // Parse coordinates
         $fromCoords = explode(',', $fromAddress);
         $toCoords = explode(',', $toAddress);
         

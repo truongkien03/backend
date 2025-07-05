@@ -2,37 +2,37 @@
 
 namespace App\Notifications;
 
+use App\Models\Order;
 use App\Services\FcmV1Service;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class DriverDeclinedOrder extends Notification implements ShouldQueue
+class UserOrderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public $order;
+    protected $order;
+    protected $title;
+    protected $body;
+    protected $type;
+    protected $additionalData;
 
-    /**
-     * Create a new notification instance.
-     *
-     * @return void
-     */
-    public function __construct($order)
+    public function __construct(Order $order, $title, $body, $type = 'order_notification', $additionalData = [])
     {
         $this->order = $order;
+        $this->title = $title;
+        $this->body = $body;
+        $this->type = $type;
+        $this->additionalData = $additionalData;
     }
 
     /**
      * Get the notification's delivery channels.
-     *
-     * @param  mixed  $notifiable
-     * @return array
      */
     public function via($notifiable)
     {
-        return ['database', 'fcm_v1'];
+        return ['fcm_v1'];
     }
 
     /**
@@ -42,11 +42,12 @@ class DriverDeclinedOrder extends Notification implements ShouldQueue
     {
         $fcmService = app(FcmV1Service::class);
         
-        $data = array_merge($this->toArray($notifiable), [
-            'type' => 'order_declined',
+        $data = array_merge([
+            'order_id' => (string) $this->order->id,
+            'type' => $this->type,
             'screen' => 'order_detail',
             'timestamp' => now()->toISOString(),
-        ]);
+        ], $this->additionalData);
 
         // Lấy FCM token của user
         $fcmTokens = $notifiable->fcm_token;
@@ -68,37 +69,23 @@ class DriverDeclinedOrder extends Notification implements ShouldQueue
 
         return $fcmService->sendToToken(
             $token,
-            'Đơn hàng đã bị từ chối',
-            'Tài xế đã từ chối đơn hàng của bạn. Hệ thống sẽ tìm tài xế khác.',
+            $this->title,
+            $this->body,
             $data
         );
     }
 
     /**
-     * Get the mail representation of the notification.
-     *
-     * @param  mixed  $notifiable
-     * @return \Illuminate\Notifications\Messages\MailMessage
-     */
-    public function toMail($notifiable)
-    {
-        return (new MailMessage)
-            ->line('The introduction to the notification.')
-            ->action('Notification Action', url('/'));
-    }
-
-    /**
      * Get the array representation of the notification.
-     *
-     * @param  mixed  $notifiable
-     * @return array
      */
     public function toArray($notifiable)
     {
         return [
-            'key' => "CancelOder",
-            'link' => "customer://Notification",
-            'oderId' => (string) $this->order->id,
+            'order_id' => $this->order->id,
+            'title' => $this->title,
+            'body' => $this->body,
+            'type' => $this->type,
+            'data' => $this->additionalData,
         ];
     }
 }

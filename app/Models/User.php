@@ -59,6 +59,40 @@ class User extends Authenticatable
         return false;
     }
 
+    /**
+     * Get the avatar URL attribute.
+     * Tự động chuyển đổi đường dẫn avatar thành URL đầy đủ
+     */
+    public function getAvatarAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        // Nếu đã là URL đầy đủ thì trả về như cũ
+        if (filter_var($value, FILTER_VALIDATE_URL)) {
+            return $value;
+        }
+        
+        // Nếu là đường dẫn tương đối bắt đầu bằng storage/, chuyển thành URL đầy đủ
+        if (strpos($value, 'storage/') === 0) {
+            return url($value);
+        }
+        
+        // Nếu bắt đầu bằng /storage/, bỏ dấu / đầu
+        if (strpos($value, '/storage/') === 0) {
+            return url(ltrim($value, '/'));
+        }
+        
+        // Nếu chỉ là tên file (có thể từ database cũ), thêm prefix storage/avatars/
+        if (!str_contains($value, '/')) {
+            return url('storage/avatars/' . $value);
+        }
+        
+        // Các trường hợp khác, coi như đường dẫn tương đối
+        return url('storage/' . ltrim($value, '/'));
+    }
+
     public function toArray()
     {
         $array = parent::toArray();

@@ -91,6 +91,15 @@ Route::prefix('driver')->group(function () {
     });
 });
 
+// FCM v1 API Test Routes (chỉ dùng cho development/testing)
+Route::middleware(['auth:api'])->prefix('fcm/v1')->group(function () {
+    Route::post('/test/token', [FcmController::class, 'testSendToToken']);
+    Route::post('/test/topic', [FcmController::class, 'testSendToTopic']);
+    Route::post('/subscribe', [FcmController::class, 'subscribeToTopic']);
+    Route::delete('/subscribe', [FcmController::class, 'unsubscribeFromTopic']);
+    Route::post('/validate', [FcmController::class, 'validateToken']);
+});
+
 Route::middleware('auth:api')->group(function () {
     Route::post('/set-password', \App\Http\Controllers\Api\Auth\SetPasswordController::class);
 });

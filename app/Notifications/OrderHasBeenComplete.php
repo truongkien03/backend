@@ -2,14 +2,13 @@
 
 namespace App\Notifications;
 
-use App\Fcm\FcmDirect;
+use App\Services\FcmV1Service;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Kreait\Firebase\Messaging\Notification as MessagingNotification;
 
-class OrderHasBeenComplete extends Notification
+class OrderHasBeenComplete extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -34,23 +33,47 @@ class OrderHasBeenComplete extends Notification
      */
     public function via($notifiable)
     {
-        return ['database', FcmTopic::class];
+        return ['database', 'fcm_v1'];
     }
 
-    public function toFcm($notifiable)
+    /**
+     * Send notification using FCM v1 API
+     */
+    public function toFcmV1($notifiable)
     {
-        $data = $this->toArray($notifiable);
+        $fcmService = app(FcmV1Service::class);
+        
+        $data = array_merge($this->toArray($notifiable), [
+            'type' => 'order_completed',
+            'screen' => 'order_detail',
+            'timestamp' => now()->toISOString(),
+        ]);
 
-        $notification = MessagingNotification::create('Thông báo hệ thống')
-            ->withTitle('Đơn hàng đã hoàn thành')
-            ->withBody('Đơn hàng đã hoàn thành');
+        // Lấy FCM token của user
+        $fcmTokens = $notifiable->fcm_token;
+        
+        if (empty($fcmTokens)) {
+            return false;
+        }
 
-        return [
-            'data' => $data,
-            'notification' => $notification
-        ];
+        // Nếu là array, gửi đến token đầu tiên
+        if (is_array($fcmTokens)) {
+            $token = $fcmTokens[0] ?? null;
+        } else {
+            $token = $fcmTokens;
+        }
+
+        if (!$token) {
+            return false;
+        }
+
+        return $fcmService->sendToToken(
+            $token,
+            'Đơn hàng đã hoàn thành',
+            'Đơn hàng của bạn đã được giao thành công. Cảm ơn bạn đã sử dụng dịch vụ!',
+            $data
+        );
     }
-
 
     /**
      * Get the mail representation of the notification.

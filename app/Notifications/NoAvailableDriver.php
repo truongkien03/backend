@@ -2,14 +2,13 @@
 
 namespace App\Notifications;
 
+use App\Services\FcmV1Service;
 use Illuminate\Bus\Queueable;
-use App\Fcm\FcmDirect;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Kreait\Firebase\Messaging\Notification as MessagingNotification;
 
-class NoAvailableDriver extends Notification
+class NoAvailableDriver extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -32,21 +31,46 @@ class NoAvailableDriver extends Notification
      */
     public function via($notifiable)
     {
-        return ['database', FcmDirect::class];
+        return ['database', 'fcm_v1'];
     }
 
-    public function toFcm($notifiable)
+    /**
+     * Send notification using FCM v1 API
+     */
+    public function toFcmV1($notifiable)
     {
-        $data = $this->toArray($notifiable);
+        $fcmService = app(FcmV1Service::class);
+        
+        $data = array_merge($this->toArray($notifiable), [
+            'type' => 'no_driver_available',
+            'screen' => 'order_detail',
+            'timestamp' => now()->toISOString(),
+        ]);
 
-        $notification = MessagingNotification::create('Default Title')
-            ->withTitle('Không tìm được tài xế')
-            ->withBody('Đơn hàng đã bị huỷ do không tìm được tài xế');
+        // Lấy FCM token của user
+        $fcmTokens = $notifiable->fcm_token;
+        
+        if (empty($fcmTokens)) {
+            return false;
+        }
 
-        return [
-            'data' => $data,
-            'notification' => $notification
-        ];
+        // Nếu là array, gửi đến token đầu tiên
+        if (is_array($fcmTokens)) {
+            $token = $fcmTokens[0] ?? null;
+        } else {
+            $token = $fcmTokens;
+        }
+
+        if (!$token) {
+            return false;
+        }
+
+        return $fcmService->sendToToken(
+            $token,
+            'Không tìm được tài xế',
+            'Xin lỗi! Hiện tại không có tài xế nào trong khu vực. Vui lòng thử lại sau.',
+            $data
+        );
     }
 
     /**
