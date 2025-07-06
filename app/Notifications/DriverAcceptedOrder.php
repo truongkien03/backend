@@ -2,14 +2,13 @@
 
 namespace App\Notifications;
 
-use App\Fcm\FcmDirect;
+use App\Services\FcmV1Service;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
-use Kreait\Firebase\Messaging\Notification as MessagingNotification;
 
-class DriverAcceptedOrder extends Notification
+class DriverAcceptedOrder extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -25,7 +24,6 @@ class DriverAcceptedOrder extends Notification
         $this->order = $order;
     }
 
-
     /**
      * Get the notification's delivery channels.
      *
@@ -34,23 +32,49 @@ class DriverAcceptedOrder extends Notification
      */
     public function via($notifiable)
     {
-        return ['database', FcmDirect::class];
+        return ['database', 'fcm_v1'];
     }
 
-    public function toFcm($notifiable)
+    /**
+     * Send notification using FCM v1 API
+     */
+    public function toFcmV1($notifiable)
     {
-        $data = $this->toArray($notifiable);
+        $fcmService = app(FcmV1Service::class);
+        
+        $data = array_merge($this->toArray($notifiable), [
+            'type' => 'driver_accepted',
+            'screen' => 'order_detail',
+            'timestamp' => now()->toISOString(),
+            'driver_name' => $this->order->driver->name ?? '',
+            'driver_phone' => $this->order->driver->phone_number ?? '',
+        ]);
 
-        $notification = MessagingNotification::create('Thông báo hệ thống')
-            ->withTitle('Đơn hàng đã được chấp nhận')
-            ->withBody('Đơn hàng đã được chấp nhận');
+        // Lấy FCM token của user
+        $fcmTokens = $notifiable->fcm_token;
+        
+        if (empty($fcmTokens)) {
+            return false;
+        }
 
-        return [
-            'data' => $data,
-            'notification' => $notification
-        ];
+        // Nếu là array, gửi đến token đầu tiên
+        if (is_array($fcmTokens)) {
+            $token = $fcmTokens[0] ?? null;
+        } else {
+            $token = $fcmTokens;
+        }
+
+        if (!$token) {
+            return false;
+        }
+
+        return $fcmService->sendToToken(
+            $token,
+            'Đơn hàng đã được chấp nhận',
+            'Tài xế đã chấp nhận đơn hàng của bạn và đang trên đường đến.',
+            $data
+        );
     }
-
 
     /**
      * Get the mail representation of the notification.

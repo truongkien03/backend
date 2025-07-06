@@ -68,10 +68,10 @@ class FcmV1Service
                 'android' => [
                     'notification' => [
                         'channel_id' => config('firebase.projects.app.channels.user_notifications.name'),
-                        'priority' => 'high',
                         'sound' => config('firebase.projects.app.channels.user_notifications.sound'),
                         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
                     ],
+                    'priority' => 'high', // Di chuyển priority ra ngoài notification
                 ],
                 'apns' => [
                     'payload' => [
@@ -113,10 +113,10 @@ class FcmV1Service
                 'android' => [
                     'notification' => [
                         'channel_id' => config('firebase.projects.app.channels.driver_notifications.name'),
-                        'priority' => 'high',
                         'sound' => config('firebase.projects.app.channels.driver_notifications.sound'),
                         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
                     ],
+                    'priority' => 'high', // Di chuyển priority ra ngoài notification
                 ],
                 'apns' => [
                     'payload' => [

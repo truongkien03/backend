@@ -80,6 +80,7 @@ Route::prefix('driver')->group(function () {
         Route::post('/set-password', \App\Http\Controllers\Api\Driver\Auth\SetPasswordController::class);
         Route::post('/change-password', \App\Http\Controllers\Api\Driver\Auth\ChangePasswordController::class);
 
+        
         Route::middleware(['profileVerified'])->group(function () {
             Route::post('current-location', [CurrentLocationController::class, 'updateLocation']);
             Route::get('/orders/summary', [AppOrderController::class, 'summary']);
@@ -94,24 +95,52 @@ Route::prefix('driver')->group(function () {
     });
 });
 
-// FCM v1 API Test Routes (chỉ dùng cho development/testing)
-Route::middleware(['auth:api'])->prefix('fcm/v1')->group(function () {
-    Route::post('/test/token', [FcmController::class, 'testSendToToken']);
-    Route::post('/test/topic', [FcmController::class, 'testSendToTopic']);
-    Route::post('/subscribe', [FcmController::class, 'subscribeToTopic']);
-    Route::delete('/subscribe', [FcmController::class, 'unsubscribeFromTopic']);
-    Route::post('/validate', [FcmController::class, 'validateToken']);
+// Test routes for debugging
+Route::get('/test/queue-status', function() {
+    $jobsCount = DB::table('jobs')->count();
+    $recentJobs = DB::table('jobs')->orderBy('id', 'desc')->limit(5)->get();
+    
+    return response()->json([
+        'queue_connection' => config('queue.default'),
+        'jobs_count' => $jobsCount,
+        'recent_jobs' => $recentJobs,
+        'failed_jobs_count' => DB::table('failed_jobs')->count()
+    ]);
 });
 
-Route::middleware('auth:api')->group(function () {
-    Route::post('/set-password', \App\Http\Controllers\Api\Auth\SetPasswordController::class);
+Route::get('/test/dispatch-job/{orderId}', function($orderId) {
+    $order = \App\Models\Order::find($orderId);
+    if (!$order) {
+        return response()->json(['error' => 'Order not found'], 404);
+    }
+    
+    \App\Jobs\FindRandomDriverForOrder::dispatch($order);
+    
+    return response()->json([
+        'message' => "Job dispatched for order {$orderId}",
+        'order' => $order
+    ]);
 });
 
-// Firebase Location APIs
-Route::prefix('firebase')->group(function () {
-    Route::get('/test-connection', [FirebaseLocationController::class, 'testConnection']);
-    Route::get('/online-drivers', [FirebaseLocationController::class, 'getOnlineDrivers']);
-    Route::get('/driver/{driverId}/location', [FirebaseLocationController::class, 'getDriverLocation']);
+Route::get('/test/drivers-status', function() {
+    $drivers = \App\Models\Driver::with('profile')->get();
+    
+    return response()->json([
+        'total_drivers' => $drivers->count(),
+        'free_drivers' => $drivers->where('status', 1)->count(),
+        'drivers_with_profile' => $drivers->filter(function($driver) {
+            return $driver->profile !== null;
+        })->count(),
+        'drivers' => $drivers->map(function($driver) {
+            return [
+                'id' => $driver->id,
+                'name' => $driver->name,
+                'status' => $driver->status,
+                'has_profile' => $driver->profile !== null,
+                'fcm_token' => $driver->fcm_token ? 'Yes' : 'No'
+            ];
+        })
+    ]);
 });
 
 // Tracker APIs

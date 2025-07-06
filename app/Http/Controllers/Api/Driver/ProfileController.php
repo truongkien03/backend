@@ -228,7 +228,7 @@ class ProfileController extends Controller
     public function addFcmToken(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'fcm_token' => 'required|string'
+            'fcm_token' => 'required|string|max:1000'
         ]);
 
         if ($validator->fails()) {
@@ -238,33 +238,73 @@ class ProfileController extends Controller
             ], 422);
         }
 
-        auth()->user()->update([
+        $driver = auth('driver')->user();
+        
+        // Cập nhật FCM token
+        $driver->update([
             'fcm_token' => $request['fcm_token']
         ]);
 
-        $messaging = app('firebase.messaging');
+        // Subscribe vào topic "all-drivers" để nhận đơn hàng mới
+        try {
+            $fcmService = app(\App\Services\FcmV1Service::class);
+            $fcmService->subscribeToTopic($request['fcm_token'], 'all-drivers');
+            
+            \Log::info('Driver subscribed to FCM topic', [
+                'driver_id' => $driver->id,
+                'topic' => 'all-drivers'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to subscribe driver to FCM topic: ' . $e->getMessage());
+        }
 
-        $messaging->subscribeToTopic(
-            auth()->user()->routeNotificationForFcm(),
-            $request['fcm_token']
-        );
-
-        return auth()->user();
+        return response()->json([
+            'success' => true,
+            'message' => 'FCM token registered successfully',
+            'data' => [
+                'driver_id' => $driver->id,
+                'fcm_token' => $request['fcm_token'],
+                'subscribed_topics' => ['all-drivers']
+            ]
+        ]);
     }
 
     public function removeFcmToken(Request $request)
     {
-        $messaging = app('firebase.messaging');
+        $driver = auth('driver')->user();
+        
+        if (!$driver->fcm_token) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Driver does not have FCM token registered'
+            ], 422);
+        }
 
-        $messaging->unsubscribeFromTopic(
-            auth()->user()->routeNotificationForFcm(),
-            auth()->user()->fcm_token
-        );
+        // Unsubscribe từ topic trước khi xóa token
+        try {
+            $fcmService = app(\App\Services\FcmV1Service::class);
+            $fcmService->unsubscribeFromTopic($driver->fcm_token, 'all-drivers');
+            
+            \Log::info('Driver unsubscribed from FCM topic', [
+                'driver_id' => $driver->id,
+                'topic' => 'all-drivers'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to unsubscribe driver from FCM topic: ' . $e->getMessage());
+        }
 
-        auth()->user()->update([
+        // Xóa FCM token
+        $driver->update([
             'fcm_token' => null
         ]);
 
-        return auth()->user();
+        return response()->json([
+            'success' => true,
+            'message' => 'FCM token removed successfully',
+            'data' => [
+                'driver_id' => $driver->id,
+                'fcm_token' => null
+            ]
+        ]);
     }
 }
