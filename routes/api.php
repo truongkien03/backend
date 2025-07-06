@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\Driver\SharingController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\FcmController;
 use App\Http\Controllers\Api\FirebaseLocationController;
+use App\Http\Controllers\Api\TrackerController;
+use App\Http\Controllers\Api\AppwriteController;
 
 /*
 |--------------------------------------------------------------------------
@@ -110,4 +112,26 @@ Route::prefix('firebase')->group(function () {
     Route::get('/test-connection', [FirebaseLocationController::class, 'testConnection']);
     Route::get('/online-drivers', [FirebaseLocationController::class, 'getOnlineDrivers']);
     Route::get('/driver/{driverId}/location', [FirebaseLocationController::class, 'getDriverLocation']);
+});
+
+// Tracker APIs
+Route::prefix('tracker')->group(function () {
+    Route::post('/update', [TrackerController::class, 'updateFromApp']); // Flutter app gọi trực tiếp
+    Route::post('/update-firebase', [TrackerController::class, 'updateFromFirebase'])->middleware('firebase.auth'); // Firebase Function (nếu có)
+    Route::get('/online', [TrackerController::class, 'getOnlineTrackers']);
+    Route::get('/all-locations', [TrackerController::class, 'getAllDriverLocations']); // Tất cả driver locations
+    Route::get('/driver/{driverId}', [TrackerController::class, 'getDriverTracker']);
+    Route::get('/driver/{driverId}/history', [TrackerController::class, 'getDriverHistory']);
+});
+
+// Appwrite APIs
+Route::prefix('appwrite')->group(function () {
+    Route::get('/test-connection', [AppwriteController::class, 'testConnection']);
+    Route::get('/info', [AppwriteController::class, 'getInfo']);
+    Route::post('/location/save', [AppwriteController::class, 'saveLocation']);
+    Route::get('/location/driver', [AppwriteController::class, 'getDriverLocation']);
+    Route::get('/drivers/online', [AppwriteController::class, 'getOnlineDrivers']);
+    Route::post('/file/upload', [AppwriteController::class, 'uploadFile']);
+    Route::post('/function/execute', [AppwriteController::class, 'executeFunction']);
+    Route::post('/notification/send', [AppwriteController::class, 'sendNotification']);
 });

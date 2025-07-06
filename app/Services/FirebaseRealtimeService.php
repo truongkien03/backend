@@ -5,6 +5,8 @@ namespace App\Services;
 use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Factory;
 use Kreait\Firebase\ServiceAccount;
+use App\Events\OnlineDriversChanged;
+use App\Jobs\ProcessOnlineDriversChange;
 
 class FirebaseRealtimeService
 {
@@ -20,7 +22,7 @@ class FirebaseRealtimeService
     {
         try {
             $factory = (new Factory)
-                ->withServiceAccount(storage_path('firebase-credentials.json'))
+                ->withServiceAccount(storage_path('service_account.json'))
                 ->withDatabaseUri('https://delivery-0805-default-rtdb.firebaseio.com');
 
             $this->database = $factory->createDatabase();
@@ -42,13 +44,23 @@ class FirebaseRealtimeService
                 $data = $snapshot->getValue();
                 
                 if ($data) {
+                    // Tự động gọi getAllOnlineDrivers khi có thay đổi
+                    $onlineDrivers = $this->getAllOnlineDrivers();
+                    
+                    // Log số lượng driver online
+                    Log::info('Auto-triggered: Found ' . count($onlineDrivers) . ' online drivers');
+                    
+                    // Xử lý từng driver
                     foreach ($data as $driverId => $locationData) {
                         $this->processLocationUpdate($driverId, $locationData);
                     }
+                    
+                    // Có thể thêm logic xử lý khác ở đây
+                    $this->handleOnlineDriversChange($onlineDrivers);
                 }
             });
 
-            Log::info('Started listening to Firebase location changes');
+            Log::info('Started listening to Firebase location changes with auto-trigger');
             
         } catch (\Exception $e) {
             Log::error('Error listening to Firebase: ' . $e->getMessage());
@@ -134,13 +146,94 @@ class FirebaseRealtimeService
     }
 
     /**
+     * Xử lý khi danh sách online drivers thay đổi
+     */
+    private function handleOnlineDriversChange($onlineDrivers)
+    {
+        try {
+            // In ra console danh sách driver online
+            echo "\n🔄 Online Drivers Update:\n";
+            echo "📊 Total Online: " . count($onlineDrivers) . "\n";
+            
+            foreach ($onlineDrivers as $driverId => $driverData) {
+                echo "🚗 {$driverId}: Lat({$driverData['latitude']}), Lon({$driverData['longitude']})\n";
+            }
+            echo "----------------------------------------\n";
+            
+            // Dispatch event để các component khác có thể lắng nghe
+            event(new OnlineDriversChanged($onlineDrivers));
+            
+            // Dispatch job để xử lý async
+            dispatch(new ProcessOnlineDriversChange($onlineDrivers));
+            
+            // Có thể thêm logic khác:
+            // - Gửi notification
+            // - Cập nhật cache
+            // - Trigger events
+            // - Gửi WebSocket message
+            
+            // Ví dụ: Gửi notification cho admin
+            $this->notifyAdminAboutOnlineDrivers($onlineDrivers);
+            
+        } catch (\Exception $e) {
+            Log::error("Error handling online drivers change: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Thông báo cho admin về thay đổi driver online
+     */
+    private function notifyAdminAboutOnlineDrivers($onlineDrivers)
+    {
+        // Có thể implement notification logic ở đây
+        // Ví dụ: gửi email, push notification, etc.
+        Log::info("Admin notification: " . count($onlineDrivers) . " drivers are online");
+    }
+
+    /**
+     * Lấy tất cả dữ liệu từ Firebase (debug)
+     */
+    public function getAllData()
+    {
+        try {
+            $snapshot = $this->reference->getSnapshot();
+            $allData = $snapshot->getValue();
+            
+            Log::info("All Firebase data: " . json_encode($allData));
+            return $allData;
+            
+        } catch (\Exception $e) {
+            Log::error("Failed to get all data: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Lấy tất cả tọa độ driver đang online
      */
     public function getAllOnlineDrivers()
     {
         try {
-            $snapshot = $this->reference->orderByChild('isOnline')->equalTo(true)->getSnapshot();
-            return $snapshot->getValue();
+            // Lấy tất cả dữ liệu trước
+            $snapshot = $this->reference->getSnapshot();
+            $allData = $snapshot->getValue();
+            
+            if (!$allData) {
+                Log::info("No data found in Firebase realtime-locations");
+                return [];
+            }
+            
+            // Lọc ra các driver đang online
+            $onlineDrivers = [];
+            foreach ($allData as $driverId => $locationData) {
+                if (isset($locationData['isOnline']) && $locationData['isOnline'] === true) {
+                    $onlineDrivers[$driverId] = $locationData;
+                }
+            }
+            
+            Log::info("Found " . count($onlineDrivers) . " online drivers");
+            return $onlineDrivers;
+            
         } catch (\Exception $e) {
             Log::error("Failed to get online drivers: " . $e->getMessage());
             return [];
