@@ -7,6 +7,7 @@ use Kreait\Firebase\Factory;
 use Kreait\Firebase\ServiceAccount;
 use App\Events\OnlineDriversChanged;
 use App\Jobs\ProcessOnlineDriversChange;
+use App\Services\LocationProximityService;
 
 class FirebaseRealtimeService
 {
@@ -53,6 +54,14 @@ class FirebaseRealtimeService
                     // Xử lý từng driver
                     foreach ($data as $driverId => $locationData) {
                         $this->processLocationUpdate($driverId, $locationData);
+                    }
+                    
+                    // Xử lý proximity check và gửi thông báo FCM
+                    $proximityService = app(LocationProximityService::class);
+                    foreach ($data as $driverId => $locationData) {
+                        if ($locationData['isOnline'] ?? false) {
+                            $proximityService->processDriverLocationUpdate($driverId, $locationData);
+                        }
                     }
                     
                     // Có thể thêm logic xử lý khác ở đây

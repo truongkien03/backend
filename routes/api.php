@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\FcmController;
 use App\Http\Controllers\Api\FirebaseLocationController;
 use App\Http\Controllers\Api\TrackerController;
 use App\Http\Controllers\Api\AppwriteController;
+use App\Http\Controllers\Api\ProximityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -84,9 +85,14 @@ Route::prefix('driver')->group(function () {
         Route::middleware(['profileVerified'])->group(function () {
             Route::post('current-location', [CurrentLocationController::class, 'updateLocation']);
             Route::get('/orders/summary', [AppOrderController::class, 'summary']);
+            Route::get('/orders/my-orders', [AppOrderController::class, 'getMyOrders']);
+            Route::get('/orders/inprocess', [AppOrderController::class, 'getInProcessOrders']);
+            Route::get('/orders/completed', [AppOrderController::class, 'getCompletedOrders']);
+            Route::get('/orders/available', [AppOrderController::class, 'getAvailableOrders']);
             Route::post('/orders/{order}/accept', [AppOrderController::class, 'acceptOrder']);
             Route::post('/orders/{order}/decline', [AppOrderController::class, 'declineOrder']);
             Route::post('/orders/{order}/complete', [AppOrderController::class, 'conpleteOrder']);
+            Route::post('/orders/{order}/arrived', [AppOrderController::class, 'arrivedAtDestination']);
             Route::get('/orders/{order}', [AppOrderController::class, 'detail']);
             Route::post('/orders/{order}/drivers/sharing', [AppOrderController::class, 'orderSharing']);
             Route::post('/orders/{order}/drivers/sharing/accept', [AppOrderController::class, 'acceptOrderSharing']);
@@ -163,4 +169,12 @@ Route::prefix('appwrite')->group(function () {
     Route::post('/file/upload', [AppwriteController::class, 'uploadFile']);
     Route::post('/function/execute', [AppwriteController::class, 'executeFunction']);
     Route::post('/notification/send', [AppwriteController::class, 'sendNotification']);
+});
+
+// Proximity APIs
+Route::prefix('proximity')->group(function () {
+    Route::get('/nearby-orders', [ProximityController::class, 'findNearbyOrders']);
+    Route::get('/driver/{driverId}/test', [ProximityController::class, 'testDriverProximity']);
+    Route::post('/simulate-location', [ProximityController::class, 'simulateLocationUpdate']);
+    Route::get('/stats', [ProximityController::class, 'getProximityStats']);
 });
