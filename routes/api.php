@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\FirebaseLocationController;
 use App\Http\Controllers\Api\TrackerController;
 use App\Http\Controllers\Api\AppwriteController;
 use App\Http\Controllers\Api\ProximityController;
+use App\Http\Controllers\Api\Driver\OrderProofImageController;
 
 /*
 |--------------------------------------------------------------------------
@@ -97,6 +98,10 @@ Route::prefix('driver')->group(function () {
             Route::post('/orders/{order}/drivers/sharing', [AppOrderController::class, 'orderSharing']);
             Route::post('/orders/{order}/drivers/sharing/accept', [AppOrderController::class, 'acceptOrderSharing']);
             Route::post('/orders/{order}/drivers/sharing/decline', [AppOrderController::class, 'declineOrderSharing']);
+            Route::get('/drive/order-pending/active-list', [AppOrderController::class, 'getActiveOrders']);
+            Route::get('/drive/order-pending/completed-list', [AppOrderController::class, 'getCompletedOrdersCustom']);
+            Route::get('/drive/order-pending/cancelled-list', [AppOrderController::class, 'getCancelledOrdersCustom']);
+            Route::post('/order-proof-image', [OrderProofImageController::class, 'store']);
         });
     });
 });

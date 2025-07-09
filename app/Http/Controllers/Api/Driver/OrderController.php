@@ -16,21 +16,7 @@ use Illuminate\Support\Facades\Validator;
 
 class OrderController extends Controller
 {
-    /**
-     * @OA\Get(
-     *      path="/driver/orders/summary",
-     *      operationId="summary",
-     *      tags={"driver"},
-     *      summary="",
-     *      description="",
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
+  
     public function summary(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -58,21 +44,7 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Post(
-     *      path="/driver/orders/{orderId}/accept",
-     *      operationId="acceptOrder",
-     *      tags={"driver"},
-     *      summary="",
-     *      description="",
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
+   
     public function acceptOrder(Request $request, Order $order)
     {
         if (!in_array(
@@ -114,21 +86,6 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Post(
-     *      path="/driver/orders/{orderId}/decline",
-     *      operationId="declineOrder",
-     *      tags={"driver"},
-     *      summary="",
-     *      description="",
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
     public function declineOrder(Request $request, Order $order)
     {
         if ($order->status_code != config('const.order.status.pending')) {
@@ -321,42 +278,7 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Get(
-     *      path="/driver/orders/my-orders",
-     *      operationId="getMyOrders",
-     *      tags={"driver"},
-     *      summary="Lấy danh sách đơn hàng của driver",
-     *      description="Lấy tất cả đơn hàng mà driver đã nhận (có driver_id = driver hiện tại)",
-     *      @OA\Parameter(
-     *          name="status",
-     *          required=false,
-     *          in="query",
-     *          description="Trạng thái đơn hàng (1: pending, 2: inprocess, 3: completed, 4: cancled_by_driver)",
-     *          @OA\Schema(type="integer")
-     *      ),
-     *      @OA\Parameter(
-     *          name="page",
-     *          required=false,
-     *          in="query",
-     *          description="Số trang",
-     *          @OA\Schema(type="integer", default=1)
-     *      ),
-     *      @OA\Parameter(
-     *          name="per_page",
-     *          required=false,
-     *          in="query",
-     *          description="Số đơn hàng mỗi trang",
-     *          @OA\Schema(type="integer", default=15)
-     *      ),
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
+    
     public function getMyOrders(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -390,35 +312,6 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Get(
-     *      path="/driver/orders/inprocess",
-     *      operationId="getInProcessOrders",
-     *      tags={"driver"},
-     *      summary="Lấy danh sách đơn hàng đang xử lý",
-     *      description="Lấy đơn hàng đang xử lý của driver (status_code = 2)",
-     *      @OA\Parameter(
-     *          name="page",
-     *          required=false,
-     *          in="query",
-     *          description="Số trang",
-     *          @OA\Schema(type="integer", default=1)
-     *      ),
-     *      @OA\Parameter(
-     *          name="per_page",
-     *          required=false,
-     *          in="query",
-     *          description="Số đơn hàng mỗi trang", 
-     *          @OA\Schema(type="integer", default=15)
-     *      ),
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
     public function getInProcessOrders(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -446,35 +339,7 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Get(
-     *      path="/driver/orders/completed",
-     *      operationId="getCompletedOrders", 
-     *      tags={"driver"},
-     *      summary="Lấy danh sách đơn hàng đã hoàn thành",
-     *      description="Lấy đơn hàng đã hoàn thành của driver (status_code = 3)",
-     *      @OA\Parameter(
-     *          name="page",
-     *          required=false,
-     *          in="query",
-     *          description="Số trang",
-     *          @OA\Schema(type="integer", default=1)
-     *      ),
-     *      @OA\Parameter(
-     *          name="per_page",
-     *          required=false,
-     *          in="query",
-     *          description="Số đơn hàng mỗi trang",
-     *          @OA\Schema(type="integer", default=15)
-     *      ),
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
+   
     public function getCompletedOrders(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -502,56 +367,7 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Get(
-     *      path="/driver/orders/available",
-     *      operationId="getAvailableOrders",
-     *      tags={"driver"},
-     *      summary="Lấy danh sách đơn hàng có sẵn để nhận",
-     *      description="Lấy đơn hàng chưa có driver nhận (driver_id = null) và chưa từ chối",
-     *      @OA\Parameter(
-     *          name="latitude",
-     *          required=false,
-     *          in="query",
-     *          description="Vĩ độ hiện tại của driver",
-     *          @OA\Schema(type="number", format="float")
-     *      ),
-     *      @OA\Parameter(
-     *          name="longitude", 
-     *          required=false,
-     *          in="query",
-     *          description="Kinh độ hiện tại của driver",
-     *          @OA\Schema(type="number", format="float")
-     *      ),
-     *      @OA\Parameter(
-     *          name="radius",
-     *          required=false,
-     *          in="query",
-     *          description="Bán kính tìm kiếm (km)",
-     *          @OA\Schema(type="number", format="float", default=5.0)
-     *      ),
-     *      @OA\Parameter(
-     *          name="page",
-     *          required=false,
-     *          in="query",
-     *          description="Số trang",
-     *          @OA\Schema(type="integer", default=1)
-     *      ),
-     *      @OA\Parameter(
-     *          name="per_page",
-     *          required=false,
-     *          in="query",
-     *          description="Số đơn hàng mỗi trang",
-     *          @OA\Schema(type="integer", default=15)
-     *      ),
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
+     
     public function getAvailableOrders(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -615,35 +431,6 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * @OA\Post(
-     *      path="/driver/orders/{orderId}/arrived",
-     *      operationId="arrivedAtDestination",
-     *      tags={"driver"},
-     *      summary="Cập nhật trạng thái đã tới địa điểm giao hàng",
-     *      description="Cập nhật status_code thành 3 (đã tới địa điểm giao) và thêm dữ liệu vào bảng tracker",
-     *      @OA\Parameter(
-     *          name="orderId",
-     *          required=true,
-     *          in="path",
-     *          description="ID của đơn hàng",
-     *          @OA\Schema(type="integer")
-     *      ),
-     *      @OA\RequestBody(
-     *          required=false,
-     *          @OA\JsonContent(
-     *              @OA\Property(property="note", type="string", description="Ghi chú của driver"),
-     *              @OA\Property(property="description", type="object", description="Mô tả chi tiết (tùy chọn)")
-     *          )
-     *      ),
-     *      @OA\Response(response=200,description="successful operation", @OA\JsonContent()),
-     *      @OA\Response(response=422, description="Bad request"),
-     *      @OA\Response(response=500, description="Server error"),
-     *      security={
-     *          {"bearerAuth": {}}
-     *      }
-     *     )
-     */
     public function arrivedAtDestination(Request $request, Order $order)
     {
         // Kiểm tra quyền truy cập
@@ -718,5 +505,87 @@ class OrderController extends Controller
                 'message' => 'Có lỗi xảy ra khi cập nhật trạng thái đơn hàng'
             ], 500);
         }
+    }
+
+    public function getActiveOrders(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100'
+        ]);
+
+        if ($validator->fails()) {
+            return response([
+                'error' => true,
+                'message' => $validator->messages()
+            ], 422);
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $orders = Order::where('driver_id', auth('driver')->id())
+            ->where('status_code', 2)
+            ->with(['customer', 'driver'])
+            ->latest()
+            ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $orders
+        ]);
+    }
+
+
+    public function getCompletedOrdersCustom(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100'
+        ]);
+
+        if ($validator->fails()) {
+            return response([
+                'error' => true,
+                'message' => $validator->messages()
+            ], 422);
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $orders = Order::where('driver_id', auth('driver')->id())
+            ->where('status_code', 3)
+            ->with(['customer', 'driver'])
+            ->latest()
+            ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $orders
+        ]);
+    }
+
+    public function getCancelledOrdersCustom(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100'
+        ]);
+
+        if ($validator->fails()) {
+            return response([
+                'error' => true,
+                'message' => $validator->messages()
+            ], 422);
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $orders = Order::where('driver_id', auth('driver')->id())
+            ->where('status_code', 4)
+            ->with(['customer', 'driver'])
+            ->latest()
+            ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $orders
+        ]);
     }
 }
