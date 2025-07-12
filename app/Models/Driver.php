@@ -47,6 +47,11 @@ class Driver extends Authenticatable
         return $this->hasOne(DriverProfile::class);
     }
 
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
     public function sharingGroup()
     {
         return $this->hasManyThrough(Driver::class, Group::class, 'master_id', 'id', 'id', 'member_id');

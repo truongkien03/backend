@@ -551,7 +551,7 @@ class OrderController extends Controller
 
         $perPage = $request->get('per_page', 15);
         $orders = Order::where('driver_id', auth('driver')->id())
-            ->where('status_code', 3)
+            ->where('status_code', 4)
             ->with(['customer', 'driver'])
             ->latest()
             ->paginate($perPage);
@@ -578,7 +578,7 @@ class OrderController extends Controller
 
         $perPage = $request->get('per_page', 15);
         $orders = Order::where('driver_id', auth('driver')->id())
-            ->where('status_code', 4)
+            ->where('status_code', 5)
             ->with(['customer', 'driver'])
             ->latest()
             ->paginate($perPage);
@@ -586,6 +586,222 @@ class OrderController extends Controller
         return response()->json([
             'success' => true,
             'data' => $orders
+        ]);
+    }
+
+    public function getArrivingOrdersCustom(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100'
+        ]);
+
+        if ($validator->fails()) {
+            return response([
+                'error' => true,
+                'message' => $validator->messages()
+            ], 422);
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $orders = Order::where('driver_id', auth('driver')->id())
+            ->where('status_code', 3)
+            ->with(['customer', 'driver'])
+            ->latest()
+            ->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $orders
+        ]);
+    }
+
+    /**
+     * Lấy lịch sử giao hàng cho shipper
+     * GET /api/driver/orders/delivery-history
+     */
+    public function getDeliveryHistory(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'from_date' => 'nullable|date',
+            'to_date' => 'nullable|date|after_or_equal:from_date',
+            'status' => 'nullable|integer|in:1,2,3,4,5',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:1|max:100',
+            'include_stats' => 'nullable|in:true,false,0,1'
+        ]);
+
+        if ($validator->fails()) {
+            return response([
+                'error' => true,
+                'message' => $validator->messages()
+            ], 422);
+        }
+
+        $driverId = auth('driver')->id();
+        $query = Order::where('driver_id', $driverId)
+            ->with(['customer', 'driver', 'tracker']);
+
+        // Lọc theo khoảng thời gian nếu có
+        if ($request->has('from_date')) {
+            $query->whereDate('created_at', '>=', $request->from_date);
+        }
+        if ($request->has('to_date')) {
+            $query->whereDate('created_at', '<=', $request->to_date);
+        }
+
+        // Lọc theo trạng thái nếu có
+        if ($request->has('status')) {
+            $query->where('status_code', $request->status);
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $orders = $query->latest()->paginate($perPage);
+
+        // Thêm thống kê nếu yêu cầu
+        $stats = null;
+        $includeStats = $request->get('include_stats', false);
+        if ($includeStats === 'true' || $includeStats === true || $includeStats === '1' || $includeStats === 1) {
+            $stats = $this->getDeliveryStats($driverId, $request->from_date, $request->to_date);
+        }
+
+        $response = [
+            'success' => true,
+            'data' => $orders
+        ];
+
+        if ($stats) {
+            $response['statistics'] = $stats;
+        }
+
+        return response()->json($response);
+    }
+
+    /**
+     * Lấy thống kê giao hàng
+     */
+    private function getDeliveryStats($driverId, $fromDate = null, $toDate = null)
+    {
+        $query = Order::where('driver_id', $driverId);
+
+        if ($fromDate) {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+        if ($toDate) {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        $totalOrders = $query->count();
+        $completedOrders = $query->where('status_code', 4)->count();
+        $cancelledOrders = $query->where('status_code', 5)->count();
+        $totalEarnings = $query->where('status_code', 4)->sum('shipping_cost');
+        $averageRating = $query->whereNotNull('driver_rate')->avg('driver_rate');
+        $totalDistance = $query->where('status_code', 4)->sum('distance');
+
+        // Thống kê theo ngày trong tuần
+        $dailyStats = $query->selectRaw('
+                DAYOFWEEK(created_at) as day_of_week,
+                COUNT(*) as total_orders,
+                SUM(CASE WHEN status_code = 4 THEN 1 ELSE 0 END) as completed_orders,
+                SUM(CASE WHEN status_code = 4 THEN shipping_cost ELSE 0 END) as earnings,
+                AVG(CASE WHEN status_code = 4 THEN distance ELSE NULL END) as avg_distance
+            ')
+            ->groupBy('day_of_week')
+            ->get();
+
+        // Thống kê theo tháng
+        $monthlyStats = $query->selectRaw('
+                YEAR(created_at) as year,
+                MONTH(created_at) as month,
+                COUNT(*) as total_orders,
+                SUM(CASE WHEN status_code = 4 THEN 1 ELSE 0 END) as completed_orders,
+                SUM(CASE WHEN status_code = 4 THEN shipping_cost ELSE 0 END) as earnings
+            ')
+            ->groupBy('year', 'month')
+            ->orderBy('year', 'desc')
+            ->orderBy('month', 'desc')
+            ->limit(12)
+            ->get();
+
+        return [
+            'overview' => [
+                'total_orders' => $totalOrders,
+                'completed_orders' => $completedOrders,
+                'cancelled_orders' => $cancelledOrders,
+                'completion_rate' => $totalOrders > 0 ? round(($completedOrders / $totalOrders) * 100, 2) : 0,
+                'total_earnings' => $totalEarnings,
+                'average_rating' => round($averageRating, 2),
+                'total_distance_km' => round($totalDistance, 2),
+                'average_distance_per_order' => $completedOrders > 0 ? round($totalDistance / $completedOrders, 2) : 0
+            ],
+            'daily_stats' => $dailyStats,
+            'monthly_stats' => $monthlyStats
+        ];
+    }
+
+    /**
+     * Lấy chi tiết lịch sử giao hàng của một đơn hàng cụ thể
+     * GET /api/driver/orders/{order}/delivery-details
+     */
+    public function getDeliveryDetails(Request $request, Order $order)
+    {
+        // Kiểm tra quyền truy cập
+        if ($order->driver_id != auth('driver')->id()) {
+            return response([
+                'error' => true,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
+        // Lấy thông tin tracker của đơn hàng
+        $trackers = $order->tracker()->orderBy('created_at')->get();
+
+        // Tính toán thời gian giao hàng
+        $deliveryTime = null;
+        if ($order->driver_accept_at && $order->completed_at) {
+            $deliveryTime = $order->completed_at->diffInMinutes($order->driver_accept_at);
+        }
+
+        // Thông tin chi tiết
+        $deliveryDetails = [
+            'order_info' => [
+                'id' => $order->id,
+                'status_code' => $order->status_code,
+                'created_at' => $order->created_at,
+                'driver_accept_at' => $order->driver_accept_at,
+                'completed_at' => $order->completed_at,
+                'delivery_time_minutes' => $deliveryTime,
+                'shipping_cost' => $order->shipping_cost,
+                'distance' => $order->distance,
+                'driver_rate' => $order->driver_rate,
+                'driver_note' => $order->driver_note
+            ],
+            'customer_info' => [
+                'id' => $order->customer->id,
+                'name' => $order->customer->name,
+                'phone' => $order->customer->phone,
+                'avatar' => $order->customer->avatar
+            ],
+            'addresses' => [
+                'from_address' => $order->from_address,
+                'to_address' => $order->to_address
+            ],
+            'items' => $order->items,
+            'tracking_history' => $trackers->map(function($tracker) {
+                return [
+                    'id' => $tracker->id,
+                    'status' => $tracker->status,
+                    'note' => $tracker->note,
+                    'description' => $tracker->description,
+                    'created_at' => $tracker->created_at
+                ];
+            }),
+            'proof_images' => $order->proofImages ?? []
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $deliveryDetails
         ]);
     }
 }

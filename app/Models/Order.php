@@ -64,6 +64,11 @@ class Order extends Model
         return $this->hasMany(Tracker::class);
     }
 
+    public function proofImages()
+    {
+        return $this->hasMany(OrderProofImage::class);
+    }
+
     public function getCustomerAvatarAttribute()
     {
         return $this->customer->avatar ?? '';

@@ -82,7 +82,6 @@ Route::prefix('driver')->group(function () {
         Route::post('/set-password', \App\Http\Controllers\Api\Driver\Auth\SetPasswordController::class);
         Route::post('/change-password', \App\Http\Controllers\Api\Driver\Auth\ChangePasswordController::class);
 
-        
         Route::middleware(['profileVerified'])->group(function () {
             Route::post('current-location', [CurrentLocationController::class, 'updateLocation']);
             Route::get('/orders/summary', [AppOrderController::class, 'summary']);
@@ -90,18 +89,23 @@ Route::prefix('driver')->group(function () {
             Route::get('/orders/inprocess', [AppOrderController::class, 'getInProcessOrders']);
             Route::get('/orders/completed', [AppOrderController::class, 'getCompletedOrders']);
             Route::get('/orders/available', [AppOrderController::class, 'getAvailableOrders']);
+            Route::get('/orders/delivery-history', [AppOrderController::class, 'getDeliveryHistory']);
             Route::post('/orders/{order}/accept', [AppOrderController::class, 'acceptOrder']);
             Route::post('/orders/{order}/decline', [AppOrderController::class, 'declineOrder']);
             Route::post('/orders/{order}/complete', [AppOrderController::class, 'conpleteOrder']);
             Route::post('/orders/{order}/arrived', [AppOrderController::class, 'arrivedAtDestination']);
             Route::get('/orders/{order}', [AppOrderController::class, 'detail']);
+            Route::get('/orders/{order}/delivery-details', [AppOrderController::class, 'getDeliveryDetails']);
             Route::post('/orders/{order}/drivers/sharing', [AppOrderController::class, 'orderSharing']);
             Route::post('/orders/{order}/drivers/sharing/accept', [AppOrderController::class, 'acceptOrderSharing']);
             Route::post('/orders/{order}/drivers/sharing/decline', [AppOrderController::class, 'declineOrderSharing']);
             Route::get('/drive/order-pending/active-list', [AppOrderController::class, 'getActiveOrders']);
             Route::get('/drive/order-pending/completed-list', [AppOrderController::class, 'getCompletedOrdersCustom']);
             Route::get('/drive/order-pending/cancelled-list', [AppOrderController::class, 'getCancelledOrdersCustom']);
+            Route::get('/drive/order-pending/arriving-list', [AppOrderController::class, 'getArrivingOrdersCustom']);
             Route::post('/order-proof-image', [OrderProofImageController::class, 'store']);
+            Route::get('/statistics/earnings', [\App\Http\Controllers\Api\Driver\StatisticsController::class, 'earningsStatistics']);
+            Route::get('/statistics/shipper', [\App\Http\Controllers\Api\Driver\StatisticsController::class, 'shipperStatistics']);
         });
     });
 });
@@ -154,6 +158,62 @@ Route::get('/test/drivers-status', function() {
     ]);
 });
 
+// Test FCM for driver
+Route::get('/test/driver-fcm/{driverId}', function($driverId) {
+    $driver = \App\Models\Driver::find($driverId);
+    if (!$driver) {
+        return response()->json(['error' => 'Driver not found'], 404);
+    }
+    
+    $fcmService = app(\App\Services\FcmV1Service::class);
+    
+    $result = $fcmService->sendToToken(
+        $driver->fcm_token,
+        'Test Notification',
+        'Đây là test notification cho driver',
+        [
+            'type' => 'test',
+            'timestamp' => now()->toISOString()
+        ]
+    );
+    
+    return response()->json([
+        'driver_id' => $driver->id,
+        'driver_name' => $driver->name,
+        'fcm_token' => $driver->fcm_token ? substr($driver->fcm_token, 0, 20) . '...' : 'NULL',
+        'fcm_sent' => $result,
+        'message' => $result ? 'FCM sent successfully' : 'FCM failed'
+    ]);
+});
+
+// Test FCM for customer
+Route::get('/test/customer-fcm/{customerId}', function($customerId) {
+    $customer = \App\Models\User::find($customerId);
+    if (!$customer) {
+        return response()->json(['error' => 'Customer not found'], 404);
+    }
+    
+    $fcmService = app(\App\Services\FcmV1Service::class);
+    
+    $result = $fcmService->sendToToken(
+        $customer->fcm_token,
+        'Test Notification',
+        'Đây là test notification cho customer',
+        [
+            'type' => 'test',
+            'timestamp' => now()->toISOString()
+        ]
+    );
+    
+    return response()->json([
+        'customer_id' => $customer->id,
+        'customer_name' => $customer->name,
+        'fcm_token' => $customer->fcm_token ? substr($customer->fcm_token, 0, 20) . '...' : 'NULL',
+        'fcm_sent' => $result,
+        'message' => $result ? 'FCM sent successfully' : 'FCM failed'
+    ]);
+});
+
 // Tracker APIs
 Route::prefix('tracker')->group(function () {
     Route::post('/update', [TrackerController::class, 'updateFromApp']); // Flutter app gọi trực tiếp
@@ -182,4 +242,12 @@ Route::prefix('proximity')->group(function () {
     Route::get('/driver/{driverId}/test', [ProximityController::class, 'testDriverProximity']);
     Route::post('/simulate-location', [ProximityController::class, 'simulateLocationUpdate']);
     Route::get('/stats', [ProximityController::class, 'getProximityStats']);
+});
+
+// Admin Statistics APIs
+Route::prefix('admin')->group(function () {
+    Route::get('/dashboard/overview', [\App\Http\Controllers\Api\Admin\StatisticsController::class, 'dashboardOverview']);
+    Route::get('/statistics/revenue', [\App\Http\Controllers\Api\Admin\StatisticsController::class, 'revenueStatistics']);
+    Route::get('/statistics/drivers', [\App\Http\Controllers\Api\Admin\StatisticsController::class, 'driverStatistics']);
+    Route::get('/statistics/areas', [\App\Http\Controllers\Api\Admin\StatisticsController::class, 'areaStatistics']);
 });
