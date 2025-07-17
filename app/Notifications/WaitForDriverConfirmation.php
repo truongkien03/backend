@@ -52,6 +52,7 @@ class WaitForDriverConfirmation extends Notification implements ShouldQueue, Sho
             'to_address' => json_encode($this->order->to_address),
             'distance' => (string) $this->order->distance,
             'shipping_cost' => (string) $this->order->shipping_cost,
+            // ĐÃ XÓA trường 'notification' khỏi data
         ]);
 
         // Gửi đến topic của tất cả drivers

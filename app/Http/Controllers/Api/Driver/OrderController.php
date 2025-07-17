@@ -282,7 +282,7 @@ class OrderController extends Controller
     public function getMyOrders(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'status' => 'nullable|integer|in:1,2,3,4',
+            //'status' => 'nullable|integer|in:1,2,3,4', // Không cần validate status nữa
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100'
         ]);
@@ -295,13 +295,9 @@ class OrderController extends Controller
         }
 
         $query = Order::where('driver_id', auth('driver')->id())
+            ->where('status_code', 2) // Chỉ lấy đơn hàng có status_code = 2
             ->with(['customer', 'driver'])
             ->latest();
-
-        // Lọc theo trạng thái nếu có
-        if ($request->has('status')) {
-            $query->where('status_code', $request->status);
-        }
 
         $perPage = $request->get('per_page', 15);
         $orders = $query->paginate($perPage);

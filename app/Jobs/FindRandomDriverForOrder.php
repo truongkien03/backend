@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class FindRandomDriverForOrder implements ShouldQueue
 {
@@ -35,6 +36,9 @@ class FindRandomDriverForOrder implements ShouldQueue
     public function handle()
     {
         $driver = $this->randomDriver();
+        Log::info('Driver được chọn:', ['driver' => $driver]);
+
+
 
         if (is_null($driver)) {
             $this->order->customer->notify(new NoAvailableDriver($this->order));
@@ -62,7 +66,8 @@ class FindRandomDriverForOrder implements ShouldQueue
               * sin( radians( JSON_EXTRACT(current_location, '$.lat') ) )
                 ) as distance"
             )
-            ->where('status', config('const.driver.status.free'))
+            // ->where('status', config('const.driver.status.free'))
+            ->where('status', 1)
             ->whereNotIn('id', $this->order->except_drivers ?? [])
             ->orderBy('distance')
             ->orderBy('review_rate', 'desc')

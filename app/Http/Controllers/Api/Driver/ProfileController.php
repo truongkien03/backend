@@ -307,4 +307,18 @@ class ProfileController extends Controller
             ]
         ]);
     }
+
+    public function changeOnlineDriver(Request $request)
+    {
+        $driver = auth('driver')->user();
+        $driver->update([
+            'status' => 1, // chuyển sang trạng thái online (free)
+            'delivering_order_id' => null // không còn đơn hàng nào đang giao
+        ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Driver status updated to online and delivering_order_id set to null',
+            'data' => $driver->fresh()
+        ]);
+    }
 }

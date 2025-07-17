@@ -81,6 +81,7 @@ Route::prefix('driver')->group(function () {
         Route::get('/notifications', [DriverProfileController::class, 'notifications']);
         Route::post('/set-password', \App\Http\Controllers\Api\Driver\Auth\SetPasswordController::class);
         Route::post('/change-password', \App\Http\Controllers\Api\Driver\Auth\ChangePasswordController::class);
+        Route::post('/change-online-driver', [DriverProfileController::class, 'changeOnlineDriver']);
 
         Route::middleware(['profileVerified'])->group(function () {
             Route::post('current-location', [CurrentLocationController::class, 'updateLocation']);
